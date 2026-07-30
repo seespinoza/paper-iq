@@ -1,0 +1,18 @@
+[tool.ruff]
+line-length = 88  # or 79 if you want strict PEP8
+target-version = "py313"  # match your Python version
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade (modernize syntax)
+    "B",   # bugbear (common bug patterns)
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
