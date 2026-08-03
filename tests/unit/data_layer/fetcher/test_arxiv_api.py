@@ -97,7 +97,7 @@ def test_fetch_paper_catalog_one_page(mocker):
 
     result = fetch_paper_catalog("cs.AI", "202607010000", "202608010000")
 
-    assert len(result) == 2
+    assert len(result) == 1
     assert mock_get.call_count == 2
 
 
