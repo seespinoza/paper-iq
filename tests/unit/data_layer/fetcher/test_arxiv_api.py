@@ -15,7 +15,7 @@ FIXTURE_DIR = Path(__file__).parent
 
 
 def load_fixture_xml(name: str):
-    return (FIXTURE_DIR / name).read_text(encoding="utf=8")
+    return (FIXTURE_DIR / name).read_text(encoding="utf-8")
 
 
 # parse xml catalog
@@ -120,7 +120,7 @@ def test_fetch_paper_catalog_multiple_pages(mocker):
 
     result = fetch_paper_catalog("cs.AI", "202607010000", "202608010000")
 
-    assert len(result) == 2  # matches sample response
+    assert len(result) == 2
     assert mock_get.call_count == 3
 
 
