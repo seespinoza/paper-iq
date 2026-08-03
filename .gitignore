@@ -1,0 +1,28 @@
+# Compiled Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build artifacts
+build/
+develop-eggs/
+dist/
+downloads/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+MANIFEST
+
+# Packaging / distribution metadata
+*.egg
+*.egg-info/
+eggs/
+.eggs/
+.installed.cfg
+
+# Runtime
+.Python
