@@ -26,3 +26,6 @@ eggs/
 
 # Runtime
 .Python
+
+# arxiv papers
+papers/
