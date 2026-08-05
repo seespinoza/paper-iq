@@ -30,6 +30,7 @@ BASE_URL = "http://export.arxiv.org/api/query"
 HEADERS = {"User-Agent": "arxiv-agent research project (se.espinoza132@gmail.com)"}
 PAPERS_PATH = Path("papers/")
 METADATA_PATH = Path("papers/metadata.jsonl.gz")
+REQUEST_DELAY_SECONDS = 3
 
 
 def _parse_feed(xml: str) -> tuple[list, int]:
@@ -49,7 +50,7 @@ def _parse_feed(xml: str) -> tuple[list, int]:
     return feed.entries, int(feed.feed.opensearch_totalresults)
 
 
-def count_number_avail_papers(cat: str, start_date: str, end_date: str) -> int:
+def count_avail_papers(cat: str, start_date: str, end_date: str) -> int:
     """Count papers available for a category and date range.
 
     Issues a single, minimal (``max_results=1``) request to the arXiv
@@ -151,7 +152,7 @@ def fetch_paper_catalog(
             break
         all_entries.extend(entries)
         start += max_results
-        time.sleep(3)
+        time.sleep(REQUEST_DELAY_SECONDS)
     return all_entries
 
 
@@ -211,14 +212,17 @@ if __name__ == "__main__":
 
     print("Time to fetch paper catalog: ", time.perf_counter() - st)
     print("Num entries: ", len(entries))
+    papers_remaining = [
+        entry
+        for entry in entries
+        if (PAPERS_PATH / f"{entry.id.split('/abs/')[-1]}.pdf").is_file()
+    ]
+    print("Papers remaining: ", len(papers_remaining))
 
     st = time.perf_counter()
 
-    for entry in entries:
-        entry_id = entry.id.split("/abs/")[-1]
-
-        # only download net new papers
-        if not (PAPERS_PATH / f"{entry_id}.pdf").is_file():
-            download_paper_pdf(entry)
+    for entry in papers_remaining:
+        download_paper_pdf(entry)
+        print("Downloaded paper: ", entry)
 
     print("Time to fetch all papers", time.perf_counter() - st)

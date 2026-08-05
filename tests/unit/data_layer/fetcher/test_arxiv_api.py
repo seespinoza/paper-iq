@@ -5,7 +5,7 @@ import requests
 
 from data_layer.fetcher.arxiv_api import (
     _parse_feed,
-    count_number_avail_papers,
+    count_avail_papers,
     download_paper_pdf,
     estimate_size_of_download_gb,
     fetch_paper_catalog,
@@ -34,24 +34,24 @@ def test_parse_feed_empty():
 
 
 # count number of papers
-def test_count_number_avail_papers(mocker):
+def test_count_avail_papers(mocker):
     mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
     mock_get.return_value = mocker.Mock(
         status_code=200, text=load_fixture_xml("successful_arxiv_response.xml")
     )
 
-    result = count_number_avail_papers("cs.AI", "202607010000", "202608010000")
+    result = count_avail_papers("cs.AI", "202607010000", "202608010000")
     assert result == 192137
 
 
-def test_count_number_avail_papers_empty(mocker):
+def test_count_avail_papers_empty(mocker):
     mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
     mock_get.return_value = mocker.Mock(
         status_code=200,
         text=load_fixture_xml("successful_arxiv_response_invalid_cat.xml"),
     )
 
-    result = count_number_avail_papers(
+    result = count_avail_papers(
         "cs.some_invalid_category", "202607010000", "202608010000"
     )
     assert result == 0
