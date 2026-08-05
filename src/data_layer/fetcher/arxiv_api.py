@@ -20,6 +20,7 @@ community-maintained ``arxiv`` Python client.
 
 import gzip
 import json
+import pickle
 import time
 from pathlib import Path
 
@@ -194,12 +195,14 @@ def download_paper_pdf(
     with gzip.open(metadata_path, "at", encoding="utf-8") as f:
         f.write(json.dumps(dict(entry), default=str) + "\n")
 
-    time.sleep(3)
+    time.sleep(REQUEST_DELAY_SECONDS)
 
 
 if __name__ == "__main__":
-    st = time.perf_counter()
+    paper_count = count_avail_papers("cs.AI", "202607010000", "202608010000")
+    print("Total papers to download for July: ", paper_count)
 
+    st = time.perf_counter()
     # If entries file already exists then do not rewrite
     entries_file = PAPERS_PATH / "entries.pkl"
     if entries_file.is_file():
@@ -208,14 +211,14 @@ if __name__ == "__main__":
     else:
         entries = fetch_paper_catalog("cs.AI", "202607010000", "202608010000", 200)
         with open(entries_file, "wb") as f:
-            f.dump(entries, f)
+            pickle.dump(entries, f)
 
     print("Time to fetch paper catalog: ", time.perf_counter() - st)
     print("Num entries: ", len(entries))
     papers_remaining = [
         entry
         for entry in entries
-        if (PAPERS_PATH / f"{entry.id.split('/abs/')[-1]}.pdf").is_file()
+        if not (PAPERS_PATH / f"{entry.id.split('/abs/')[-1]}.pdf").is_file()
     ]
     print("Papers remaining: ", len(papers_remaining))
 
@@ -223,6 +226,6 @@ if __name__ == "__main__":
 
     for entry in papers_remaining:
         download_paper_pdf(entry)
-        print("Downloaded paper: ", entry)
+        print("Downloaded paper!")
 
     print("Time to fetch all papers", time.perf_counter() - st)
