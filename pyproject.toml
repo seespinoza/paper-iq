@@ -1,3 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arxiv-agent"
+version = "0.1.0"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 line-length = 88  # or 79 if you want strict PEP8
 target-version = "py313"  # match your Python version
@@ -9,9 +20,13 @@ select = [
     "F",   # pyflakes
     "I",   # isort (import sorting)
     "UP",  # pyupgrade (modernize syntax)
-    "B",   # bugbear (common bug patterns)
+    "B",
+    "ANN"   # bugbear (common bug patterns)
 ]
 ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
 
 [tool.ruff.format]
 quote-style = "double"
