@@ -7,7 +7,6 @@ from data_layer.fetcher.arxiv_api import (
     _parse_feed,
     count_avail_papers,
     download_paper_pdf,
-    estimate_size_of_download_gb,
     fetch_paper_catalog,
 )
 
@@ -54,29 +53,6 @@ def test_count_avail_papers_empty(mocker):
     result = count_avail_papers(
         "cs.some_invalid_category", "202607010000", "202608010000"
     )
-    assert result == 0
-
-
-# count estimated size of download
-def test_estimate_size_of_download_gb(mocker):
-    mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
-    mock_get.return_value = mocker.Mock(
-        status_code=200,
-        text=load_fixture_xml("successful_arxiv_response.xml"),
-    )
-
-    result = estimate_size_of_download_gb("cs.AI", "202607010000", "202608010000", 0.2)
-    assert result == 192137 * 0.2
-
-
-def test_estimate_size_of_download_gb_empty(mocker):
-    mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
-    mock_get.return_value = mocker.Mock(
-        status_code=200,
-        text=load_fixture_xml("successful_arxiv_response_invalid_cat.xml"),
-    )
-
-    result = estimate_size_of_download_gb("cs.AI", "202607010000", "202608010000", 0.2)
     assert result == 0
 
 
