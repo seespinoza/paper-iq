@@ -207,7 +207,7 @@ if __name__ == "__main__":
     entries_file = PAPERS_PATH / "entries.pkl"
     if entries_file.is_file():
         with open(entries_file, "rb") as f:
-            entries = f.read()
+            entries = pickle.load(f)
     else:
         entries = fetch_paper_catalog("cs.AI", "202607010000", "202608010000", 200)
         with open(entries_file, "wb") as f:
@@ -225,7 +225,18 @@ if __name__ == "__main__":
     st = time.perf_counter()
 
     for entry in papers_remaining:
-        download_paper_pdf(entry)
-        print("Downloaded paper!")
+        try:
+            download_paper_pdf(entry)
+            print("Downloaded paper!")
+        except requests.exceptions.HTTPError:
+            print("Paper failed!")
 
     print("Time to fetch all papers", time.perf_counter() - st)
+    papers_remaining = [
+        entry
+        for entry in entries
+        if not (PAPERS_PATH / f"{entry.id.split('/abs/')[-1]}.pdf").is_file()
+    ]
+    print("Papers remaining: ", len(papers_remaining))
+    for entry in papers_remaining:
+        print(entry.id)
