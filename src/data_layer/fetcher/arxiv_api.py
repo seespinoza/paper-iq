@@ -83,31 +83,6 @@ def count_avail_papers(cat: str, start_date: str, end_date: str) -> int:
     return total
 
 
-def estimate_size_of_download_gb(
-    cat: str, start_date: str, end_date: str, avg_file_size_gb: float
-) -> float:
-    """Estimate the total download size for a category and date range.
-
-    Not yet implemented; intended to combine
-    :func:`count_number_avail_papers` with ``avg_file_size_gb`` to
-    estimate total disk usage before running a bulk download.
-
-    Args:
-        cat: arXiv category to search, e.g. ``"cs.AI"``.
-        start_date: Inclusive start of the submission date range, in
-            arXiv's ``YYYYMMDDHHMM`` format.
-        end_date: Inclusive end of the submission date range, in
-            arXiv's ``YYYYMMDDHHMM`` format.
-        avg_file_size_gb: Assumed average PDF size, in gigabytes, used
-            to project total download size.
-
-    Returns:
-        Estimated download size in gigabytes. Currently always
-        returns ``-1`` as a placeholder.
-    """
-    return -1
-
-
 def fetch_paper_catalog(
     cat: str, start_date: str, end_date: str, max_results: int = 100
 ) -> list:
