@@ -29,3 +29,6 @@ eggs/
 
 # arxiv papers
 papers/
+
+# local env vars
+.env
