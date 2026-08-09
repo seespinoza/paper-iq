@@ -32,3 +32,6 @@ papers/
 
 # local env vars
 .env
+
+# claude skills
+.claude
