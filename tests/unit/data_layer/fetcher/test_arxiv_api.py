@@ -5,9 +5,8 @@ import requests
 
 from data_layer.fetcher.arxiv_api import (
     _parse_feed,
-    count_number_avail_papers,
+    count_avail_papers,
     download_paper_pdf,
-    estimate_size_of_download_gb,
     fetch_paper_catalog,
 )
 
@@ -34,49 +33,26 @@ def test_parse_feed_empty():
 
 
 # count number of papers
-def test_count_number_avail_papers(mocker):
+def test_count_avail_papers(mocker):
     mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
     mock_get.return_value = mocker.Mock(
         status_code=200, text=load_fixture_xml("successful_arxiv_response.xml")
     )
 
-    result = count_number_avail_papers("cs.AI", "202607010000", "202608010000")
+    result = count_avail_papers("cs.AI", "202607010000", "202608010000")
     assert result == 192137
 
 
-def test_count_number_avail_papers_empty(mocker):
+def test_count_avail_papers_empty(mocker):
     mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
     mock_get.return_value = mocker.Mock(
         status_code=200,
         text=load_fixture_xml("successful_arxiv_response_invalid_cat.xml"),
     )
 
-    result = count_number_avail_papers(
+    result = count_avail_papers(
         "cs.some_invalid_category", "202607010000", "202608010000"
     )
-    assert result == 0
-
-
-# count estimated size of download
-def test_estimate_size_of_download_gb(mocker):
-    mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
-    mock_get.return_value = mocker.Mock(
-        status_code=200,
-        text=load_fixture_xml("successful_arxiv_response.xml"),
-    )
-
-    result = estimate_size_of_download_gb("cs.AI", "202607010000", "202608010000", 0.2)
-    assert result == 192137 * 0.2
-
-
-def test_estimate_size_of_download_gb_empty(mocker):
-    mock_get = mocker.patch("data_layer.fetcher.arxiv_api.requests.get")
-    mock_get.return_value = mocker.Mock(
-        status_code=200,
-        text=load_fixture_xml("successful_arxiv_response_invalid_cat.xml"),
-    )
-
-    result = estimate_size_of_download_gb("cs.AI", "202607010000", "202608010000", 0.2)
     assert result == 0
 
 
@@ -97,7 +73,7 @@ def test_fetch_paper_catalog_one_page(mocker):
 
     result = fetch_paper_catalog("cs.AI", "202607010000", "202608010000")
 
-    assert len(result) == 2
+    assert len(result) == 1
     assert mock_get.call_count == 2
 
 
@@ -161,13 +137,15 @@ def test_download_paper(mocker, tmp_path):
 
     entries, _ = _parse_feed(load_fixture_xml("successful_arxiv_response.xml"))
     real_entry = entries[0]
+    metadata_path = tmp_path / "metadata.jsonl.gz"
 
-    download_paper_pdf(real_entry, tmp_path)
+    download_paper_pdf(real_entry, tmp_path, metadata_path)
 
     arxiv_id = real_entry.id.split("/abs/")[-1]
     saved_file = tmp_path / f"{arxiv_id}.pdf"
     assert saved_file.exists()
     assert saved_file.read_bytes() == b"fake pdf bytes"
+    assert metadata_path.exists()
 
 
 def test_download_paper_invalid(mocker, tmp_path):
