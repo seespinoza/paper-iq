@@ -20,15 +20,19 @@ community-maintained ``arxiv`` Python client.
 
 import gzip
 import json
+import os
 import pickle
 import time
 from pathlib import Path
 
 import feedparser
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_URL = "http://export.arxiv.org/api/query"
-HEADERS = {"User-Agent": "arxiv-agent research project (se.espinoza132@gmail.com)"}
+HEADERS = {"User-Agent": "arxiv-agent research project " + os.environ["PERSONAL_EMAIL"]}
 PAPERS_PATH = Path("papers/")
 METADATA_PATH = Path("papers/metadata.jsonl.gz")
 REQUEST_DELAY_SECONDS = 3
