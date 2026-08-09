@@ -36,6 +36,8 @@ HEADERS = {"User-Agent": "arxiv-agent research project " + os.environ["PERSONAL_
 PAPERS_PATH = Path("papers/")
 METADATA_PATH = Path("papers/metadata.jsonl.gz")
 REQUEST_DELAY_SECONDS = 3
+METADATA_TIMEOUT = (5, 15)  # (connect timeout, read timeout) in seconds
+PDF_TIMEOUT = (5, 60)  # (connect timeout, read timeout) in seconds
 
 
 def _parse_feed(xml: str) -> tuple[list, int]:
@@ -81,7 +83,9 @@ def count_avail_papers(cat: str, start_date: str, end_date: str) -> int:
         "start": 0,
         "max_results": 1,
     }
-    resp = requests.get(BASE_URL, params=params, headers=HEADERS)
+    resp = requests.get(
+        BASE_URL, params=params, headers=HEADERS, timeout=METADATA_TIMEOUT
+    )
     resp.raise_for_status()
     _, total = _parse_feed(resp.text)
     return total
@@ -125,7 +129,9 @@ def fetch_paper_catalog(
             "start": start,
             "max_results": max_results,
         }
-        resp = requests.get(BASE_URL, params=params, headers=HEADERS)
+        resp = requests.get(
+            BASE_URL, params=params, headers=HEADERS, timeout=METADATA_TIMEOUT
+        )
         resp.raise_for_status()
         entries, _ = _parse_feed(resp.text)
         if not entries:
@@ -166,7 +172,7 @@ def download_paper_pdf(
     pdf_url = next(
         link.href for link in entry.links if getattr(link, "title", None) == "pdf"
     )
-    resp = requests.get(pdf_url, headers=HEADERS)
+    resp = requests.get(pdf_url, headers=HEADERS, timeout=PDF_TIMEOUT)
     resp.raise_for_status()
     with open(download_path / f"{entry_id}.pdf", "wb") as f:
         f.write(resp.content)
