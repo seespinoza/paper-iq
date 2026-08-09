@@ -137,13 +137,15 @@ def test_download_paper(mocker, tmp_path):
 
     entries, _ = _parse_feed(load_fixture_xml("successful_arxiv_response.xml"))
     real_entry = entries[0]
+    metadata_path = tmp_path / "metadata.jsonl.gz"
 
-    download_paper_pdf(real_entry, tmp_path)
+    download_paper_pdf(real_entry, tmp_path, metadata_path)
 
     arxiv_id = real_entry.id.split("/abs/")[-1]
     saved_file = tmp_path / f"{arxiv_id}.pdf"
     assert saved_file.exists()
     assert saved_file.read_bytes() == b"fake pdf bytes"
+    assert metadata_path.exists()
 
 
 def test_download_paper_invalid(mocker, tmp_path):
