@@ -25,4 +25,6 @@ jobs:
         run: ruff check .
 
       - name: Run tests
+        env:
+          PERSONAL_EMAIL: ${{ secrets.PERSONAL_EMAIL }}
         run: pytest tests -v
