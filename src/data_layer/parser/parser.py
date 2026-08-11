@@ -15,6 +15,15 @@ import pymupdf4llm
 
 PAPERS_PATH = Path("papers/")
 PARSED_PAPERS_PATH = Path("papers/parsed_papers.parquet")
+PARQUET_BATCH_SIZE = 100
+PARQUET_BATCH_SCHEMA = pa.schema(
+    [
+        ("paper_path", pa.string()),
+        ("paper_id", pa.string()),
+        ("page_number", pa.int64()),
+        ("text", pa.string()),
+    ]
+)
 
 
 def extract_paper_text(
@@ -45,6 +54,7 @@ def extract_paper_text(
 def parse_papers_to_parquet(
     papers_dir: Path = PAPERS_PATH,
     output_path: Path = PARSED_PAPERS_PATH,
+    batch_schema: pa.Schema = PARQUET_BATCH_SCHEMA,
     n_pages: int | None = None,
     ocr: bool = True,
 ) -> Path:
@@ -66,26 +76,46 @@ def parse_papers_to_parquet(
     Returns:
         The path the Parquet file was written to.
     """
+    paper_paths: list[str] = []
     paper_ids: list[str] = []
     page_numbers: list[int] = []
     texts: list[str] = []
     failed: list[str] = []
 
-    for pdf_path in sorted(papers_dir.glob("*.pdf")):
-        try:
-            pages = extract_paper_text(pdf_path, n_pages=n_pages, ocr=ocr)
-        except Exception:
-            failed.append(pdf_path.name)
-            continue
-        for page_number, text in enumerate(pages):
-            paper_ids.append(pdf_path.stem)
-            page_numbers.append(page_number)
-            texts.append(text)
+    papers_to_process = sorted(papers_dir.glob("*.pdf"))
 
-    table = pa.table(
-        {"paper_id": paper_ids, "page_number": page_numbers, "text": texts}
-    )
-    pq.write_table(table, output_path, compression="zstd")
+    # Check which papers have already been processed
+    if output_path.is_file():
+        table = pq.read_table(output_path)
+        processed = table["paper_path"].to_pylist()
+
+        papers_to_process = [p for p in papers_to_process if p not in processed]
+
+    with pq.ParquetWriter(output_path, batch_schema, compression="zstd"):
+        for paper_num, pdf_path in enumerate(papers_to_process):
+            try:
+                pages = extract_paper_text(pdf_path, n_pages=n_pages, ocr=ocr)
+            except Exception:
+                failed.append(pdf_path.name)
+                continue
+            for page_number, text in enumerate(pages):
+                paper_paths.append(str(pdf_path))
+                paper_ids.append(pdf_path.stem)
+                page_numbers.append(page_number)
+                texts.append(text)
+
+            # Batch writing
+            if paper_num % PARQUET_BATCH_SIZE == 0:
+                table = pa.table(
+                    {
+                        "paper_path": pdf_path,
+                        "paper_id": paper_ids,
+                        "page_number": page_numbers,
+                        "text": texts,
+                    }
+                )
+                pq.write_table(table, output_path, compression="zstd")
+                paper_paths, paper_ids, page_numbers, texts = [], [], [], []
 
     if failed:
         print(f"Failed to parse {len(failed)} paper(s): {', '.join(failed)}")
