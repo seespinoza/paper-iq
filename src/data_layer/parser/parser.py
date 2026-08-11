@@ -8,6 +8,7 @@ into a database.
 """
 
 import os
+import time
 from pathlib import Path
 
 import pyarrow as pa
@@ -229,5 +230,7 @@ def parse_papers_to_parquet(
 
 
 if __name__ == "__main__":
+    start = time.perf_counter()
     out = parse_papers_to_parquet()
     print(f"Wrote parsed papers to {out}")
+    print(f"Time spent: {time.perf_counter() - start}")
