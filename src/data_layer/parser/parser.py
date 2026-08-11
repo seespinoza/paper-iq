@@ -19,7 +19,7 @@ PARQUET_BATCH_SIZE = 100
 PARQUET_BATCH_SCHEMA = {
     "paper_path": "string",
     "paper_id": "string",
-    "page_number": "string",
+    "page_number": "",
     "text": "string",
 }
 
@@ -107,7 +107,7 @@ def _flush_batch(
     # Append to current file if one exists
     if output_path.is_file():
         current_df = pd.read_parquet(output_path)
-        df = pd.concat([current_df, df])
+        df = pd.concat([current_df, df], ignore_index=True)
     df.to_parquet(output_path)
 
 
