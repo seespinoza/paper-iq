@@ -9,18 +9,25 @@ into a database.
 
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pymupdf4llm
 
 PAPERS_PATH = Path("papers/")
+PARSED_PAPERS_PATH = Path("papers/parsed_papers.parquet")
 
 
-def extract_paper_text(pdf_path: Path, n_pages: int | None = None) -> list[str]:
+def extract_paper_text(
+    pdf_path: Path, n_pages: int | None = None, ocr: bool = True
+) -> list[str]:
     """Extract per-page markdown text from a paper PDF.
 
     Args:
         pdf_path: Path to the paper's PDF file.
         n_pages: Number of leading pages to extract, starting from the
             first page. Defaults to all pages in the document.
+        ocr: Boolean indicating if OCR will be used (PyMuPDF4LLM)
+        uses it only when necessary (i.e., for tables and figure).
 
     Returns:
         List of markdown strings, one per extracted page, in page
@@ -29,7 +36,63 @@ def extract_paper_text(pdf_path: Path, n_pages: int | None = None) -> list[str]:
     doc = pymupdf4llm.pymupdf.open(pdf_path)
     n = doc.page_count if n_pages is None else min(n_pages, doc.page_count)
     chunks = pymupdf4llm.to_markdown(
-        doc, pages=list(range(n)), page_chunks=True, use_ocr=True
+        doc, pages=list(range(n)), page_chunks=True, use_ocr=ocr
     )
     doc.close()
     return [chunk["text"] for chunk in chunks]
+
+
+def parse_papers_to_parquet(
+    papers_dir: Path = PAPERS_PATH,
+    output_path: Path = PARSED_PAPERS_PATH,
+    n_pages: int | None = None,
+    ocr: bool = True,
+) -> Path:
+    """Extract text from every PDF in a directory and write it to Parquet.
+
+    Extracts each PDF's per-page markdown text via
+    :func:`extract_paper_text` and writes the results to a single
+    Parquet (zstd-compressed) file with one row per page. A PDF that
+    fails to parse is skipped rather than aborting the whole run, since
+    a single malformed file among thousands shouldn't block the rest.
+
+    Args:
+        papers_dir: Directory containing paper PDFs to parse.
+        output_path: Destination Parquet file.
+        n_pages: Number of leading pages to extract per paper.
+            Defaults to all pages.
+        ocr: Boolean indicating if OCR will be used during extraction.
+
+    Returns:
+        The path the Parquet file was written to.
+    """
+    paper_ids: list[str] = []
+    page_numbers: list[int] = []
+    texts: list[str] = []
+    failed: list[str] = []
+
+    for pdf_path in sorted(papers_dir.glob("*.pdf")):
+        try:
+            pages = extract_paper_text(pdf_path, n_pages=n_pages, ocr=ocr)
+        except Exception:
+            failed.append(pdf_path.name)
+            continue
+        for page_number, text in enumerate(pages):
+            paper_ids.append(pdf_path.stem)
+            page_numbers.append(page_number)
+            texts.append(text)
+
+    table = pa.table(
+        {"paper_id": paper_ids, "page_number": page_numbers, "text": texts}
+    )
+    pq.write_table(table, output_path, compression="zstd")
+
+    if failed:
+        print(f"Failed to parse {len(failed)} paper(s): {', '.join(failed)}")
+
+    return output_path
+
+
+if __name__ == "__main__":
+    out = parse_papers_to_parquet()
+    print(f"Wrote parsed papers to {out}")
