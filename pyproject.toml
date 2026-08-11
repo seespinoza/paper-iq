@@ -12,6 +12,7 @@ where = ["src"]
 [tool.ruff]
 line-length = 88  # or 79 if you want strict PEP8
 target-version = "py313"  # match your Python version
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = [
