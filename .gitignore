@@ -35,3 +35,6 @@ papers/
 
 # claude skills
 .claude
+
+# notebook data
+notebooks/*pickle
