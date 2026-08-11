@@ -7,6 +7,7 @@ separate loader module is responsible for ingesting the extracted text
 into a database.
 """
 
+import os
 from pathlib import Path
 
 import pyarrow as pa
@@ -85,13 +86,18 @@ def parse_papers_to_parquet(
     papers_to_process = sorted(papers_dir.glob("*.pdf"))
 
     # Check which papers have already been processed
+    existing_table = None
     if output_path.is_file():
-        table = pq.read_table(output_path)
-        processed = table["paper_path"].to_pylist()
+        existing_table = pq.read_table(output_path)
+        processed = existing_table["paper_path"].to_pylist()
+        papers_to_process = [p for p in papers_to_process if str(p) not in processed]
 
-        papers_to_process = [p for p in papers_to_process if p not in processed]
+    # New rows are written to a scratch file rather than output_path directly,
+    # since opening a ParquetWriter on output_path would truncate it before
+    # the existing rows are merged back in below.
+    new_rows_path = output_path.parent / f"{output_path.stem}.new.tmp.parquet"
 
-    with pq.ParquetWriter(output_path, batch_schema, compression="zstd"):
+    with pq.ParquetWriter(new_rows_path, batch_schema, compression="zstd") as writer:
         for paper_num, pdf_path in enumerate(papers_to_process):
             try:
                 pages = extract_paper_text(pdf_path, n_pages=n_pages, ocr=ocr)
@@ -105,17 +111,43 @@ def parse_papers_to_parquet(
                 texts.append(text)
 
             # Batch writing
-            if paper_num % PARQUET_BATCH_SIZE == 0:
+            if (paper_num + 1) % PARQUET_BATCH_SIZE == 0:
                 table = pa.table(
                     {
-                        "paper_path": pdf_path,
+                        "paper_path": paper_paths,
                         "paper_id": paper_ids,
                         "page_number": page_numbers,
                         "text": texts,
-                    }
+                    },
+                    schema=batch_schema,
                 )
-                pq.write_table(table, output_path, compression="zstd")
+                writer.write_table(table)
                 paper_paths, paper_ids, page_numbers, texts = [], [], [], []
+
+        # Remainder batch
+        if paper_paths:
+            table = pa.table(
+                {
+                    "paper_path": paper_paths,
+                    "paper_id": paper_ids,
+                    "page_number": page_numbers,
+                    "text": texts,
+                },
+                schema=batch_schema,
+            )
+            writer.write_table(table)
+
+    new_table = pq.read_table(new_rows_path)
+    merged_table = (
+        pa.concat_tables([existing_table, new_table])
+        if existing_table is not None
+        else new_table
+    )
+
+    merged_path = output_path.parent / f"{output_path.stem}.merged.tmp.parquet"
+    pq.write_table(merged_table, merged_path, compression="zstd")
+    os.replace(merged_path, output_path)
+    new_rows_path.unlink()
 
     if failed:
         print(f"Failed to parse {len(failed)} paper(s): {', '.join(failed)}")
