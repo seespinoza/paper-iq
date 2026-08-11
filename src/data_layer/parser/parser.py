@@ -7,6 +7,7 @@ separate loader module is responsible for ingesting the extracted text
 into a database.
 """
 
+import os
 import time
 from pathlib import Path
 
@@ -19,7 +20,7 @@ PARQUET_BATCH_SIZE = 100
 PARQUET_BATCH_SCHEMA = {
     "paper_path": "string",
     "paper_id": "string",
-    "page_number": "",
+    "page_number": "int64",
     "text": "string",
 }
 
@@ -49,30 +50,25 @@ def extract_paper_text(
     return [chunk["text"] for chunk in chunks]
 
 
-def _papers_to_process(
-    papers_dir: Path, output_path: Path
-) -> tuple[list[Path], pd.DataFrame | None]:
-    """Determine which PDFs still need parsing and load prior progress.
+def _papers_to_process(papers_dir: Path, output_path: Path) -> list[Path]:
+    """Determine which PDFs in ``papers_dir`` still need parsing.
 
     Args:
         papers_dir: Directory containing paper PDFs to parse.
         output_path: Destination Parquet file, if one already exists.
 
     Returns:
-        A tuple of ``(papers_to_process, existing_table)`` where
-        ``papers_to_process`` excludes any paper already present in
-        ``existing_table``, and ``existing_table`` is ``None`` if
-        ``output_path`` doesn't exist yet.
+        Paper PDFs in ``papers_dir`` not already present in
+        ``output_path``.
     """
     papers_to_process = sorted(papers_dir.glob("*.pdf"))
 
-    existing_table = None
     if output_path.is_file():
-        existing_table = pd.read_parquet(output_path)
-        processed = existing_table["paper_path"].to_list()
+        processed = pd.read_parquet(output_path, columns=["paper_path"])
+        processed = processed["paper_path"].to_list()
         papers_to_process = [p for p in papers_to_process if str(p) not in processed]
 
-    return papers_to_process, existing_table
+    return papers_to_process
 
 
 def _flush_batch(
@@ -83,10 +79,15 @@ def _flush_batch(
     texts: list[str],
     batch_schema: dict[str, str],
 ) -> None:
-    """Write one accumulated batch of rows to an open ParquetWriter.
+    """Write one accumulated batch of rows to ``output_path``.
+
+    Appends the batch to any rows already at ``output_path`` and
+    writes the combined result to a scratch file, which is then
+    atomically swapped in for ``output_path`` so it's never left
+    partially written if the process is interrupted mid-write.
 
     Args:
-        writer: Open ParquetWriter to append the batch to.
+        output_path: Destination Parquet file to append the batch to.
         paper_paths: Accumulated ``paper_path`` values for this batch.
         paper_ids: Accumulated ``paper_id`` values for this batch.
         page_numbers: Accumulated ``page_number`` values for this batch.
@@ -108,7 +109,12 @@ def _flush_batch(
     if output_path.is_file():
         current_df = pd.read_parquet(output_path)
         df = pd.concat([current_df, df], ignore_index=True)
-    df.to_parquet(output_path)
+
+    tmp_path = output_path.parent / f"{output_path.stem}.tmp.parquet"
+
+    # Write to temp path to avoid file corruption
+    df.to_parquet(tmp_path, compression="zstd")
+    os.replace(tmp_path, output_path)
 
 
 def _extract_and_write(
@@ -118,17 +124,17 @@ def _extract_and_write(
     n_pages: int | None,
     ocr: bool,
 ) -> list[str]:
-    """Extract text from each PDF and write it to a scratch Parquet file.
+    """Extract text from each PDF and write it to ``output_path``.
 
-    Writes rows in batches of ``PARQUET_BATCH_SIZE`` papers via a
-    ``ParquetWriter`` so extracted text doesn't have to be held in
+    Writes rows in batches of ``PARQUET_BATCH_SIZE`` papers via
+    :func:`_flush_batch` so extracted text doesn't have to be held in
     memory for the whole run. A PDF that fails to parse is skipped
     rather than aborting the whole run, since a single malformed file
     among thousands shouldn't block the rest.
 
     Args:
         papers_to_process: Paper PDFs to extract and write.
-        new_rows_path: Scratch Parquet file to write the new rows to.
+        output_path: Destination Parquet file to write extracted rows to.
         batch_schema: Schema each written batch conforms to.
         n_pages: Number of leading pages to extract per paper.
             Defaults to all pages.
@@ -196,7 +202,7 @@ def parse_papers_to_parquet(
     Returns:
         The path the Parquet file was written to.
     """
-    papers_to_process, existing_table = _papers_to_process(papers_dir, output_path)
+    papers_to_process = _papers_to_process(papers_dir, output_path)
 
     failed = _extract_and_write(
         papers_to_process, output_path, batch_schema, n_pages, ocr
