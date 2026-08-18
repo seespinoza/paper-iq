@@ -58,13 +58,13 @@ def process_corpus(
 
         for doc in corpus_df.itertuples(index=False):
             chunks = fixed_size_chunk(splitter, doc.text)
-            for i, chunk in enumerate(chunks):
+            for chunk in chunks:
                 records.append(
                     {
                         "paper_id": doc.paper_id,
                         "paper_path": doc.paper_path,
                         "num_pages": doc.num_pages,
-                        "chunk_id": i,
+                        "chunk_id": chunk_id,
                         "chunk_text": chunk,
                         "chunk_char_count": len(chunk),
                     }
