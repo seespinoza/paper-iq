@@ -8,7 +8,7 @@ def markdown_chunk(
 
 
 def fixed_size_chunk(
-    text: str, chunk_size: int, chunk_overlap: int, length_function: str
+    text: str, chunk_size: int, chunk_overlap: int, length_function: str = "len"
 ) -> None:
     return ("", "")
 
