@@ -1,10 +1,19 @@
-def markdown_chunk():
-    pass
+import pandas as pd
 
 
-def fixed_size_chunk():
-    pass
+def markdown_chunk(
+    text: str, headers_to_split_on: list[tuple[str, str]], strip_headers: bool = False
+):
+    return ("", {})
 
 
-def process_corpus():
-    pass
+def fixed_size_chunk(
+    text: str, chunk_size: int, chunk_overlap: int, length_function: str
+):
+    return ("", "")
+
+
+def process_corpus(
+    df: pd.DataFrame, strategy: str, **kwargs: dict[str, str]
+) -> pd.DataFrame:
+    return pd.DataFrame()
