@@ -12,7 +12,7 @@ CHUNK_SIZE = 1500  # Measured in characters
 CHUNK_OVERLAP = 150  # Measured in characters
 
 
-def _combine_pages(pages: pd.DataFrame):
+def _combine_pages(pages: pd.DataFrame) -> pd.Series:
 
     return pd.Series(
         {
