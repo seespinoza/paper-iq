@@ -6,7 +6,10 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
 )
 
-PAPER_PATH = Path("../papers/")
+PAPER_PATH = Path("papers/")
+HEADERS_TO_SPLIT_ON = [("#", "h1"), ("##", "h2"), ("###", "h3"), ("####", "h4")]
+CHUNK_SIZE = 1500  # Measured in characters
+CHUNK_OVERLAP = 150  # Measured in characters
 
 
 def _combine_pages(pages: pd.DataFrame):
@@ -48,12 +51,13 @@ def process_corpus(
     chunks_df = pd.DataFrame()
     records = []
     splitter = None
+    chunk_id = 0
 
-    if strategy == "md":
-        splitter = MarkdownHeaderTextSplitter(**kwargs)
+    if strategy == "fs":
+        splitter = RecursiveCharacterTextSplitter(**kwargs)
 
         for doc in corpus_df.itertuples(index=False):
-            chunks = markdown_chunk(splitter, doc.text)
+            chunks = fixed_size_chunk(splitter, doc.text)
             for i, chunk in enumerate(chunks):
                 records.append(
                     {
@@ -65,14 +69,15 @@ def process_corpus(
                         "chunk_char_count": len(chunk),
                     }
                 )
+                chunk_id += 1
         chunks_df = pd.DataFrame.from_records(records)
 
-    elif strategy == "fs":  # fixed-size
-        splitter = RecursiveCharacterTextSplitter(**kwargs)
+    elif strategy == "md":  # fixed-size
+        splitter = MarkdownHeaderTextSplitter(**kwargs)
 
         for doc in corpus_df.itertuples(index=False):
             chunks, metadata = markdown_chunk(splitter, doc.text)
-            chunk_id = 0
+
             for sub_chunk, sub_metadata in zip(chunks, metadata, strict=True):
                 records.append(
                     {
@@ -104,3 +109,19 @@ if __name__ == "__main__":
     document_df = document_df[
         document_df["num_pages"] <= 200
     ].copy()  # Remove books and dissertations
+
+    md_chunk_df = process_corpus(
+        corpus_df=document_df,
+        strategy="md",
+        headers_to_split_on=HEADERS_TO_SPLIT_ON,
+        strip_headers=False,
+    )
+    print(md_chunk_df.head())
+
+    fs_df = process_corpus(
+        corpus_df=document_df,
+        strategy="fs",
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+    )
+    print(fs_df.head())
