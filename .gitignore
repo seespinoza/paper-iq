@@ -38,3 +38,4 @@ papers/
 
 # notebook data
 notebooks/*pickle
+notebooks/*.csv
