@@ -1,5 +1,9 @@
 import pandas as pd
 import pytest
+from langchain_text_splitters import (
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
 
 from data_layer.chunker.lang_chain_chunker import (
     fixed_size_chunk,
@@ -7,15 +11,14 @@ from data_layer.chunker.lang_chain_chunker import (
     process_corpus,
 )
 
-pytestmark = pytest.mark.xfail(
-    reason="lang_chain_chunker is a placeholder; implementation pending",
-    strict=False,
-)
+HEADERS = [("#", "h1"), ("##", "h2")]
 
 FIXED_SIZE_DOCUMENT_DF = pd.DataFrame(
     {
-        "doc_id": [1, 2, 3],
-        "doc_text": [
+        "paper_id": [1, 2, 3],
+        "paper_path": ["paper_1.pdf", "paper_2.pdf", "paper_3.pdf"],
+        "num_pages": [5, 3, 7],
+        "text": [
             "Jack and Sebastian ran to the store",
             "Scout jumped over the moon.",
             "Tables were set and moved! 345656576 \n",
@@ -25,8 +28,10 @@ FIXED_SIZE_DOCUMENT_DF = pd.DataFrame(
 
 MARKDOWN_DOCUMENT_DF = pd.DataFrame(
     {
-        "doc_id": [1, 2],
-        "doc_text": [
+        "paper_id": [1, 2],
+        "paper_path": ["paper_1.pdf", "paper_2.pdf"],
+        "num_pages": [1, 2],
+        "text": [
             "# title\nthis is a test",
             "".join(
                 [
@@ -42,13 +47,11 @@ MARKDOWN_DOCUMENT_DF = pd.DataFrame(
     }
 )
 
-HEADERS = [("#", "h1"), ("##", "h2")]
-
 
 @pytest.mark.parametrize(
     "text, expected_chunks, expected_metadata",
     [
-        pytest.param("", [], [{}], id="no_text"),
+        pytest.param("", [], [], id="no_text"),
         pytest.param(
             "this is a test",
             ["this is a test"],
@@ -73,9 +76,9 @@ HEADERS = [("#", "h1"), ("##", "h2")]
                 ]
             ),
             [
-                "".join(["# 1\n", "aaa\n" * 50]),
-                "".join(["## 1.2\n", "aaa\n" * 50]),
-                "".join(["# 2\n", "b" * 50]),
+                "# 1\n" + "\n".join(["aaa"] * 50),
+                "## 1.2\n" + "\n".join(["aaa"] * 50),
+                "# 2\n" + "b" * 50,
             ],
             [
                 {"h1": "1"},
@@ -86,13 +89,12 @@ HEADERS = [("#", "h1"), ("##", "h2")]
         ),
     ],
 )
-def test_markdown_chunker(text, expected_chunks, expected_metadata):
-
-    chunks, metadata = markdown_chunk(
-        headers_to_split_on=HEADERS,
-        strip_headers=False,
-        text=text,
+def test_markdown_chunk(text, expected_chunks, expected_metadata):
+    splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=HEADERS, strip_headers=False
     )
+
+    chunks, metadata = markdown_chunk(splitter, text)
 
     assert chunks == expected_chunks
     assert metadata == expected_metadata
@@ -101,7 +103,7 @@ def test_markdown_chunker(text, expected_chunks, expected_metadata):
 @pytest.mark.parametrize(
     "text, chunk_size, chunk_overlap, expected_chunks",
     [
-        pytest.param("", None, None, [], id="no_text"),
+        pytest.param("", 10, 2, [], id="no_text"),
         pytest.param(
             "abc def ghi",
             3,
@@ -118,62 +120,112 @@ def test_markdown_chunker(text, expected_chunks, expected_metadata):
         ),
     ],
 )
-def test_fixed_size_chunker(text, chunk_size, chunk_overlap, expected_chunks):
-
-    chunks = fixed_size_chunk(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap, text=text
+def test_fixed_size_chunk(text, chunk_size, chunk_overlap, expected_chunks):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
+
+    chunks = fixed_size_chunk(splitter, text)
 
     assert chunks == expected_chunks
 
 
-def _expected_corpus_df(document_df, strategy, **chunk_kwargs):
+def test_process_corpus_fixed_size():
 
-    records = []
-    for row in document_df.itertuples(index=False):
-        if strategy == "fixed_size":
-            chunks = fixed_size_chunk(text=row.doc_text, **chunk_kwargs)
-            metadata = [{}] * len(chunks)
-        elif strategy == "markdown":
-            chunks, metadata = markdown_chunk(text=row.doc_text, **chunk_kwargs)
-        else:
-            raise ValueError(f"unknown strategy: {strategy}")
+    process_df = process_corpus(
+        FIXED_SIZE_DOCUMENT_DF, strategy="fs", chunk_size=10, chunk_overlap=2
+    )
 
-        for chunk_id, (chunk, meta) in enumerate(zip(chunks, metadata, strict=True)):
-            records.append(
-                {
-                    "doc_id": row.doc_id,
-                    "chunk_id": chunk_id,
-                    "chunk_text": chunk,
-                    **meta,
-                }
-            )
+    expected_df = pd.DataFrame.from_records(
+        [
+            {"paper_id": 1, "paper_path": "paper_1.pdf", "num_pages": 5, "chunk_id": 0, "chunk_text": "Jack and", "chunk_char_count": 8},
+            {"paper_id": 1, "paper_path": "paper_1.pdf", "num_pages": 5, "chunk_id": 1, "chunk_text": "Sebastian", "chunk_char_count": 9},
+            {"paper_id": 1, "paper_path": "paper_1.pdf", "num_pages": 5, "chunk_id": 2, "chunk_text": "ran to", "chunk_char_count": 6},
+            {"paper_id": 1, "paper_path": "paper_1.pdf", "num_pages": 5, "chunk_id": 3, "chunk_text": "the store", "chunk_char_count": 9},
+            {"paper_id": 2, "paper_path": "paper_2.pdf", "num_pages": 3, "chunk_id": 0, "chunk_text": "Scout", "chunk_char_count": 5},
+            {"paper_id": 2, "paper_path": "paper_2.pdf", "num_pages": 3, "chunk_id": 1, "chunk_text": "jumped", "chunk_char_count": 6},
+            {"paper_id": 2, "paper_path": "paper_2.pdf", "num_pages": 3, "chunk_id": 2, "chunk_text": "over the", "chunk_char_count": 8},
+            {"paper_id": 2, "paper_path": "paper_2.pdf", "num_pages": 3, "chunk_id": 3, "chunk_text": "moon.", "chunk_char_count": 5},
+            {"paper_id": 3, "paper_path": "paper_3.pdf", "num_pages": 7, "chunk_id": 0, "chunk_text": "Tables", "chunk_char_count": 6},
+            {"paper_id": 3, "paper_path": "paper_3.pdf", "num_pages": 7, "chunk_id": 1, "chunk_text": "were set", "chunk_char_count": 8},
+            {"paper_id": 3, "paper_path": "paper_3.pdf", "num_pages": 7, "chunk_id": 2, "chunk_text": "and", "chunk_char_count": 3},
+            {"paper_id": 3, "paper_path": "paper_3.pdf", "num_pages": 7, "chunk_id": 3, "chunk_text": "moved!", "chunk_char_count": 6},
+            {"paper_id": 3, "paper_path": "paper_3.pdf", "num_pages": 7, "chunk_id": 4, "chunk_text": "345656576", "chunk_char_count": 9},
+        ]
+    )
 
-    return pd.DataFrame.from_records(records)
+    pd.testing.assert_frame_equal(
+        process_df.reset_index(drop=True).sort_index(axis=1),
+        expected_df.reset_index(drop=True).sort_index(axis=1),
+        check_dtype=False,
+    )
 
 
-@pytest.mark.parametrize(
-    "document_df, strategy, chunk_kwargs",
-    [
-        pytest.param(
-            FIXED_SIZE_DOCUMENT_DF,
-            "fixed_size",
-            {"chunk_size": 10, "chunk_overlap": 2},
-            id="fixed_size",
-        ),
-        pytest.param(
-            MARKDOWN_DOCUMENT_DF,
-            "markdown",
-            {"headers_to_split_on": HEADERS, "strip_headers": False},
-            id="markdown",
-        ),
-    ],
-)
-def test_process_corpus(document_df, strategy, chunk_kwargs):
+def test_process_corpus_markdown():
 
-    process_df = process_corpus(document_df, strategy=strategy, **chunk_kwargs)
+    process_df = process_corpus(
+        MARKDOWN_DOCUMENT_DF,
+        strategy="md",
+        headers_to_split_on=HEADERS,
+        strip_headers=False,
+    )
 
-    expected_df = _expected_corpus_df(document_df, strategy, **chunk_kwargs)
+    chunk_2a = "# 1\n" + "\n".join(["aaa"] * 50)
+    chunk_2b = "## 1.2\n" + "\n".join(["aaa"] * 50)
+    chunk_2c = "# 2\n" + "b" * 50
+
+    expected_df = pd.DataFrame.from_records(
+        [
+            {
+                "paper_id": 1,
+                "paper_path": "paper_1.pdf",
+                "chunk_id": 0,
+                "h1": "title",
+                "h2": None,
+                "h3": None,
+                "h4": None,
+                "chunk_text": "# title\nthis is a test",
+                "chunk_char_count": 22,
+                "chunk_word_count": 6,
+            },
+            {
+                "paper_id": 2,
+                "paper_path": "paper_2.pdf",
+                "chunk_id": 1,
+                "h1": "1",
+                "h2": None,
+                "h3": None,
+                "h4": None,
+                "chunk_text": chunk_2a,
+                "chunk_char_count": 203,
+                "chunk_word_count": 52,
+            },
+            {
+                "paper_id": 2,
+                "paper_path": "paper_2.pdf",
+                "chunk_id": 2,
+                "h1": "1",
+                "h2": "1.2",
+                "h3": None,
+                "h4": None,
+                "chunk_text": chunk_2b,
+                "chunk_char_count": 206,
+                "chunk_word_count": 52,
+            },
+            {
+                "paper_id": 2,
+                "paper_path": "paper_2.pdf",
+                "chunk_id": 3,
+                "h1": "2",
+                "h2": None,
+                "h3": None,
+                "h4": None,
+                "chunk_text": chunk_2c,
+                "chunk_char_count": 54,
+                "chunk_word_count": 3,
+            },
+        ]
+    )
 
     pd.testing.assert_frame_equal(
         process_df.reset_index(drop=True).sort_index(axis=1),
@@ -184,10 +236,10 @@ def test_process_corpus(document_df, strategy, chunk_kwargs):
 
 def test_process_corpus_empty_dataframe():
 
-    empty_df = pd.DataFrame({"doc_id": [], "doc_text": []})
+    empty_df = pd.DataFrame({"paper_id": [], "paper_path": [], "num_pages": [], "text": []})
 
     process_df = process_corpus(
-        empty_df, strategy="fixed_size", chunk_size=10, chunk_overlap=2
+        empty_df, strategy="fs", chunk_size=10, chunk_overlap=2
     )
 
     assert process_df.empty
